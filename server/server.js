@@ -27,14 +27,12 @@ ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/main.css", `${__dirname}/../clie
 
 http
   .createServer((req, res) => {
-    const registeredRoute = Object.prototype.hasOwnProperty.call(ROUTES_PARAMS, req.url);
-    const routeType = getRouteTypeByURL(req.url);
-
-    if (registeredRoute) {
+    if (req.url in ROUTES_PARAMS) {
       doFileResponse(res, ROUTES_PARAMS[req.url])
       return
     }
 
+    const routeType = getRouteTypeByURL(req.url);
     if (routeType === API_ROUTE_TYPE || routeType === ASSET_ROUTE_TYPE) {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(getErrorStr("Resource not found"), ENCODING);

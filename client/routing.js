@@ -1,4 +1,7 @@
 (w => {
+  const LINK_DATA_ATTRUBUTE = "link";
+  const ACTIVE_LINK_CLASSNAME = "active";
+
   const DEFAULT_ROUTE = "/temperature";
   const ROUTES = {
     "/temperature": {
@@ -14,16 +17,15 @@
       }
     }
   };
-  const LINK_DATA_ATTRUBUTE = "link"
-  const ACTIVE_LINK_CLASSNAME = "active";
 
   let currentRoute = w.location.href.split(w.location.host).pop();
   let registeredLinks = [];
 
   function getRegisteredLinks(attr) {
     const linksElements = w.document.querySelectorAll(`[data-${attr}]`);
-    linksElements.forEach((el) => {
-      el.addEventListener("click", () => {
+    linksElements.forEach(el => {
+      el.addEventListener("click", event => {
+        event.preventDefault();
         try {
           goToRoute(el.dataset[attr]);
         } catch (err) {
@@ -35,15 +37,20 @@
     return linksElements;
   }
 
-  function setActiveLink(linksElements, currentRoute, className = ACTIVE_LINK_CLASSNAME) {
-    linksElements.forEach((el) => {
-        const linkToCurrentRoute = el.dataset[LINK_DATA_ATTRUBUTE] === currentRoute
-        el.classList[linkToCurrentRoute ? "add" : "remove"](className)
+  function setActiveLink(
+    linksElements,
+    currentRoute,
+    className = ACTIVE_LINK_CLASSNAME
+  ) {
+    linksElements.forEach(el => {
+      const linkToCurrentRoute =
+        el.dataset[LINK_DATA_ATTRUBUTE] === currentRoute;
+      el.classList[linkToCurrentRoute ? "add" : "remove"](className);
     });
   }
 
   function goToRoute(route, replace = false) {
-    if (isKnownRoute(route) === false) {
+    if ((route in ROUTES) === false) {
       throw new Error(`Unknown route: ${route}`);
     }
     if (currentRoute === route) {
@@ -61,15 +68,11 @@
     w.dispatchEvent(routeChangedEvent);
 
     currentRoute = route;
-    setActiveLink(registeredLinks, currentRoute)
-  }
-
-  function isKnownRoute(route) {
-    return Object.prototype.hasOwnProperty.call(ROUTES, route);
+    setActiveLink(registeredLinks, currentRoute);
   }
 
   w.addEventListener("load", () => {
     registeredLinks = getRegisteredLinks(LINK_DATA_ATTRUBUTE);
-    goToRoute(isKnownRoute(currentRoute) ? currentRoute : DEFAULT_ROUTE, true);
+    goToRoute(currentRoute in ROUTES? currentRoute : DEFAULT_ROUTE, true);
   });
 })(window);
