@@ -23,38 +23,40 @@ ROUTES_PARAMS.registerRoute(API_ROUTE_TYPE, "/temperature", `${__dirname}/meteo_
 ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/main.js", `${__dirname}/../client/main.js`, "text/javascript")
 ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/main.css", `${__dirname}/../client/main.css`, "text/css")
 
+
 http
   .createServer((req, res) => {
-    let url = req.url;
+    const registeredRoute = Object.prototype.hasOwnProperty.call(ROUTES_PARAMS, req.url);
+    const routeType = getRouteTypeByURL(req.url);
 
-    const isUnknownRoute = Object.prototype.hasOwnProperty.call(ROUTES_PARAMS, url) === false;
-    const routeType = getRouteTypeByURL(url);
-
-    if (isUnknownRoute) {
-      if (routeType === API_ROUTE_TYPE || routeType === ASSET_ROUTE_TYPE) {
-        res.writeHead(404, CONTENT_TYPE);
-        res.end(getErrorStr("Resource not found"), ENCODING);
-        return;
-      }
-      url = "/"
+    if (registeredRoute) {
+      doFileResponse(res, ROUTES_PARAMS[req.url])
+      return
     }
 
-    getFileData(ROUTES_PARAMS[url].filePath)
-      .then(data => {
-        res.writeHead(200, ROUTES_PARAMS[url].headers);
-        res.end(data, ENCODING);
-      })
-      .catch(err => {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(getErrorStr(err), ENCODING);
-      });
+    if (routeType === API_ROUTE_TYPE || routeType === ASSET_ROUTE_TYPE) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(getErrorStr("Resource not found"), ENCODING);
+      return
+    }
+
+    doFileResponse(res, ROUTES_PARAMS["/"])
   })
   .listen(PORT, () => {
     console.log(`Server start at port ${PORT}`);
   });
 
-function getErrorStr(msg) {
-  return JSON.stringify({ error: msg });
+
+async function doFileResponse(res, { filePath, headers }) {
+  await getFileData(filePath)
+    .then(data => {
+      res.writeHead(200, headers);
+      res.end(data, ENCODING);
+    })
+    .catch(err => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(getErrorStr(err), ENCODING);
+    });
 }
 
 async function getFileData(filePath) {
@@ -62,6 +64,10 @@ async function getFileData(filePath) {
   const data = await fd.readFile({ encoding: ENCODING });
   await fd.close();
   return data;
+}
+
+function getErrorStr(msg) {
+  return JSON.stringify({ error: msg });
 }
 
 function getRouteTypeByURL(url) {
@@ -73,6 +79,5 @@ function getRouteTypeByURL(url) {
     default:
       break;
   }
-
   return null
 }
