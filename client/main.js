@@ -1,4 +1,6 @@
 (w => {
+  const API_URL = "/api";
+
   class App {
     constructor(apiService, dbService) {
       this._apiService = apiService;
@@ -15,11 +17,13 @@
   }
 
   class ApiService {
-    constructor() {}
+    constructor(apiUrl) {
+      this._apiUrl = apiUrl;
+    }
 
-    async fetchData(url) {
+    async fetch(url) {
       try {
-        const response = await fetch(url);
+        const response = await fetch(`${this._apiUrl}/${url}`);
         // todo: why await?
         return await response.json();
       } catch (err) {
@@ -41,31 +45,32 @@
           throw new Error("Error loading database (opening)");
         };
         DBOpenRequest.onsuccess = event => {
-            this._db = DBOpenRequest.result;
-            resolve(this);
+          this._db = DBOpenRequest.result;
+          resolve(this);
         };
-        DBOpenRequest.onupgradeneeded = event => this._onupgradeneeded(event.target.result);
+        DBOpenRequest.onupgradeneeded = event =>
+          this._onupgradeneeded(event.target.result);
       });
     }
 
     _onupgradeneeded(db) {
-        db.onerror = function(event) {
-          throw new Error("Error loading database (upgrading)");
-        };
+      db.onerror = function(event) {
+        throw new Error("Error loading database (upgrading)");
+      };
 
-        this._temperatureObjStore = db.createObjectStore("temperature", {
-          keyPath: "t"
-        });
-        this._precipitationObjStore = db.createObjectStore("precipitation", {
-          keyPath: "t"
-        });
-        this._temperatureObjStore.createIndex("v", "v", { unique: false });
-        this._precipitationObjStore.createIndex("v", "v", { unique: false });
+      this._temperatureObjStore = db.createObjectStore("temperature", {
+        keyPath: "t"
+      });
+      this._precipitationObjStore = db.createObjectStore("precipitation", {
+        keyPath: "t"
+      });
+      this._temperatureObjStore.createIndex("v", "v", { unique: false });
+      this._precipitationObjStore.createIndex("v", "v", { unique: false });
     }
   }
 
   const dbService = new DbService(w.indexedDB, 2);
-  const apiService = new ApiService();
+  const apiService = new ApiService(API_URL);
   const app = new App(apiService, dbService);
 
   w.addEventListener("routeChanged", async event => {
