@@ -1,1 +1,8 @@
-console.log('hello2')
+((w)=>{
+    
+
+    w.addEventListener("routeChanged", event => {
+        console.log(event)
+    })
+    
+})(window)

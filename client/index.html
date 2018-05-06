@@ -8,18 +8,17 @@
         <meta name="description" content="MetaQuotes Software test">
 
         <link rel="stylesheet" href="/assets/main.css">
+        
         <script src="/assets/main.js" defer></script>
-        <script async>
-            console.log('Hello1');
-        </script>
+        <script src="/assets/routing.js" async></script>
 </head>
 
 <body>
     <div class="app">
         <nav class="app__navigation nav">
             <ul class="nav__options">
-                <li class="nav__item"><a href="/temp" data-link>Temperature</a></li>
-                <li class="nav__item"><a href="/prec" data-link>Precipitation</a></li>
+                <li class="nav__item"><a data-link="/temperature">Temperature</a></li>
+                <li class="nav__item"><a data-link="/precipitation">Precipitation</a></li>
             </ul>
         </nav>
         <section class="app__main main-section">

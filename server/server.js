@@ -21,6 +21,7 @@ const ROUTES_PARAMS = new SPARoutesParams("/", `${__dirname}/../client/index.htm
 ROUTES_PARAMS.registerRoute(API_ROUTE_TYPE, "/precipitation", `${__dirname}/meteo_data/precipitation.json`, "application/json")
 ROUTES_PARAMS.registerRoute(API_ROUTE_TYPE, "/temperature", `${__dirname}/meteo_data/temperature.json`, "application/json")
 ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/main.js", `${__dirname}/../client/main.js`, "text/javascript")
+ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/routing.js", `${__dirname}/../client/routing.js`, "text/javascript")
 ROUTES_PARAMS.registerRoute(ASSET_ROUTE_TYPE, "/main.css", `${__dirname}/../client/main.css`, "text/css")
 
 
