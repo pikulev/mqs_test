@@ -7,33 +7,37 @@
     "/temperature": {
       title: "Temperature (MetaQuotes Software test)",
       state: {
-        api: "/api/temperature"
+        controller: "temperatureCtrl"
       }
     },
     "/precipitation": {
       title: "Precipitation (MetaQuotes Software test)",
       state: {
-        api: "/api/precipitation"
+        controller: "precipitationCtrl"
       }
     }
   };
 
-  let currentRoute = w.location.href.split(w.location.host).pop();
+  const startRoute = w.location.href.split(w.location.host).pop();
+  let currentRoute = null;
   let registeredLinks = [];
 
-  function getRegisteredLinks(attr) {
+  function getLinkClickHandler(route) {
+    return event => {
+      event.preventDefault();
+      try {
+        goToRoute(route);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+  }
+
+  function getRegisteredLinks(attr, clickHandler) {
     const linksElements = w.document.querySelectorAll(`[data-${attr}]`);
     linksElements.forEach(el => {
-      el.addEventListener("click", event => {
-        event.preventDefault();
-        try {
-          goToRoute(el.dataset[attr]);
-        } catch (err) {
-          console.error(err);
-        }
-      });
+      el.addEventListener("click", getLinkClickHandler(el.dataset[attr]));
     });
-
     return linksElements;
   }
 
@@ -50,7 +54,7 @@
   }
 
   function goToRoute(route, replace = false) {
-    if ((route in ROUTES) === false) {
+    if (route in ROUTES === false) {
       throw new Error(`Unknown route: ${route}`);
     }
     if (currentRoute === route) {
@@ -73,6 +77,6 @@
 
   w.addEventListener("load", () => {
     registeredLinks = getRegisteredLinks(LINK_DATA_ATTRUBUTE);
-    goToRoute(currentRoute in ROUTES? currentRoute : DEFAULT_ROUTE, true);
+    goToRoute(startRoute in ROUTES ? startRoute : DEFAULT_ROUTE, true);
   });
 })(window);
