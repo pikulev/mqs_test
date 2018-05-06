@@ -1,7 +1,8 @@
 (w => {
   class App {
-    constructor(apiService) {
+    constructor(apiService, dbService) {
       this._apiService = apiService;
+      this._dbServicePromise = dbService.init();
     }
 
     temperatureCtrl() {
@@ -29,46 +30,43 @@
 
   class DbService {
     constructor(indexedDB, version) {
-      this.indexedDB = indexedDB;
       this.version = version;
+      this._indexedDB = indexedDB;
     }
 
     init() {
       return new Promise(resolve => {
-        const DBOpenRequest = this.indexedDB.open("MQS_test_DB", this.version);
+        const DBOpenRequest = this._indexedDB.open("MQS_test_DB", this.version);
         DBOpenRequest.onerror = event => {
           throw new Error("Error loading database (opening)");
         };
         DBOpenRequest.onsuccess = event => {
-          this._db = DBOpenRequest.result;
-          resolve(this);
-          console.info("Database initialised");
+            this._db = DBOpenRequest.result;
+            resolve(this);
         };
-
-        DBOpenRequest.onupgradeneeded = event => {
-          const db = event.target.result;
-
-          db.onerror = function(event) {
-            throw new Error("Error loading database (upgrading)");
-          };
-
-          this._temperatureObjStore = db.createObjectStore("temperature", {
-            keyPath: "t"
-          });
-          this._precipitationObjStore = db.createObjectStore("precipitation", {
-            keyPath: "t"
-          });
-          this._temperatureObjStore.createIndex("v", "v", { unique: false });
-          this._precipitationObjStore.createIndex("v", "v", { unique: false });
-        };
+        DBOpenRequest.onupgradeneeded = event => this._onupgradeneeded(event.target.result);
       });
+    }
+
+    _onupgradeneeded(db) {
+        db.onerror = function(event) {
+          throw new Error("Error loading database (upgrading)");
+        };
+
+        this._temperatureObjStore = db.createObjectStore("temperature", {
+          keyPath: "t"
+        });
+        this._precipitationObjStore = db.createObjectStore("precipitation", {
+          keyPath: "t"
+        });
+        this._temperatureObjStore.createIndex("v", "v", { unique: false });
+        this._precipitationObjStore.createIndex("v", "v", { unique: false });
     }
   }
 
-  const db = new DbService(w.indexedDB, 2);
-  console.log(db)
-db.init().then(() => {console.log("URSSS")})
-  const app = new App(new ApiService());
+  const dbService = new DbService(w.indexedDB, 2);
+  const apiService = new ApiService();
+  const app = new App(apiService, dbService);
 
   w.addEventListener("routeChanged", async event => {
     if (!event.detail.state) {
