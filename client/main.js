@@ -158,7 +158,7 @@
       const iterator = await this._TransformService.toDBFormat(serverData);
       const transaction = this._transactoinsFactory[objStoreName]();
       for (let entry of iterator) {
-          console.log("add", entry);
+        console.log("add", entry);
         transaction.add(entry.value, entry.key);
       }
     }
