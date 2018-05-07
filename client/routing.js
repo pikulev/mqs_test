@@ -71,6 +71,7 @@
     });
     w.dispatchEvent(routeChangedEvent);
 
+    console.log('dispatched', ROUTES[route].title);
     currentRoute = route;
     setActiveLink(registeredLinks, currentRoute);
   }
