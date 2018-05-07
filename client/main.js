@@ -1,6 +1,8 @@
+"use strict";
 (w => {
   const API_URL = "/api";
   const STORE_PARAMS = {
+    dbName: "MQS_test_DB",
     keyName: "t",
     valueName: "v"
   };
@@ -37,16 +39,22 @@
   }
 
   class DbService {
-    constructor(indexedDB, IDBKeyRange, version, { keyName, valueName }) {
+    constructor(
+      indexedDB,
+      IDBKeyRange,
+      version,
+      { dbName, keyName, valueName }
+    ) {
       this.version = version;
       this._indexedDB = indexedDB;
       this._IDBKeyRange = IDBKeyRange;
+      this._dbName = dbName;
       this._keyName = keyName;
       this._valueName = valueName;
     }
 
     init() {
-      const DBOpenRequest = this._indexedDB.open("MQS_test_DB", this.version);
+      const DBOpenRequest = this._indexedDB.open(this._dbName, this.version);
 
       return new Promise(resolve => {
         DBOpenRequest.onerror = event => {
@@ -56,32 +64,45 @@
           this._db = DBOpenRequest.result;
           resolve(this);
         };
-        DBOpenRequest.onupgradeneeded = event =>
+        DBOpenRequest.onupgradeneeded = event => {
+          console.log("Hey");
           this._onupgradeneeded(event.target.result);
+        };
       });
     }
 
     temperatureRangeGen(lowerKey, upperKey) {
-        return this._getRangeGenerator(this._temperatureObjStore, lowerKey, upperKey)
+      return this._getRangeGenerator(
+        this._temperatureObjStore,
+        lowerKey,
+        upperKey
+      );
     }
 
     precipitationRangeGen(lowerKey, upperKey) {
-        return this._getRangeGenerator(this._precipitationObjStore, lowerKey, upperKey)
+      return this._getRangeGenerator(
+        this._precipitationObjStore,
+        lowerKey,
+        upperKey
+      );
     }
 
     _getRangeGenerator(objStore, lowerKey, upperKey) {
       const index = objStore.index(this._keyName);
       const boundKeyRange = IDBKeyRange.bound(lowerKey, upperKey, false, false);
 
-      return function* () {
-        index.openCursor(boundKeyRange).onsuccess = (event) => {
+      return new Promise(resolve => {
+        index.openCursor(boundKeyRange).onsuccess = event => {
           const cursor = event.target.result;
-          if (cursor) {
-            yield cursor
-            cursor.continue();
-          }
+          
+          resolve(function*() {
+            if (cursor) {
+              yield cursor;
+              cursor.continue();
+            }
+          });
         };
-      }
+      });
     }
 
     _onupgradeneeded(db) {
