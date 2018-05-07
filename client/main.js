@@ -1,5 +1,9 @@
 (w => {
   const API_URL = "/api";
+  const STORE_PARAMS = {
+    keyName: "t",
+    valueName: "v"
+  };
 
   class App {
     constructor(apiService, dbService) {
@@ -33,14 +37,18 @@
   }
 
   class DbService {
-    constructor(indexedDB, version) {
+    constructor(indexedDB, IDBKeyRange, version, { keyName, valueName }) {
       this.version = version;
       this._indexedDB = indexedDB;
+      this._IDBKeyRange = IDBKeyRange;
+      this._keyName = keyName;
+      this._valueName = valueName;
     }
 
     init() {
+      const DBOpenRequest = this._indexedDB.open("MQS_test_DB", this.version);
+
       return new Promise(resolve => {
-        const DBOpenRequest = this._indexedDB.open("MQS_test_DB", this.version);
         DBOpenRequest.onerror = event => {
           throw new Error("Error loading database (opening)");
         };
@@ -53,23 +61,52 @@
       });
     }
 
+    temperatureRangeGen(lowerKey, upperKey) {
+        return this._getRangeGenerator(this._temperatureObjStore, lowerKey, upperKey)
+    }
+
+    precipitationRangeGen(lowerKey, upperKey) {
+        return this._getRangeGenerator(this._precipitationObjStore, lowerKey, upperKey)
+    }
+
+    _getRangeGenerator(objStore, lowerKey, upperKey) {
+      const index = objStore.index(this._keyName);
+      const boundKeyRange = IDBKeyRange.bound(lowerKey, upperKey, false, false);
+
+      return function* () {
+        index.openCursor(boundKeyRange).onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor) {
+            yield cursor
+            cursor.continue();
+          }
+        };
+      }
+    }
+
     _onupgradeneeded(db) {
       db.onerror = function(event) {
         throw new Error("Error loading database (upgrading)");
       };
 
       this._temperatureObjStore = db.createObjectStore("temperature", {
-        keyPath: "t"
+        keyPath: this._keyName
       });
       this._precipitationObjStore = db.createObjectStore("precipitation", {
-        keyPath: "t"
+        keyPath: this._keyName
       });
-      this._temperatureObjStore.createIndex("v", "v", { unique: false });
-      this._precipitationObjStore.createIndex("v", "v", { unique: false });
+      this._temperatureObjStore.createIndex(this._valueName, this._valueName, {
+        unique: false
+      });
+      this._precipitationObjStore.createIndex(
+        this._valueName,
+        this._valueName,
+        { unique: false }
+      );
     }
   }
 
-  const dbService = new DbService(w.indexedDB, 2);
+  const dbService = new DbService(w.indexedDB, w.IDBKeyRange, 2, STORE_PARAMS);
   const apiService = new ApiService(API_URL);
   const app = new App(apiService, dbService);
 
