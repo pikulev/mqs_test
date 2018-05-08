@@ -8,22 +8,29 @@
   const TRANSFORM_WORKER_PATH = "/assets/workers/transform.js";
 
   class App {
-    constructor(apiService, dbService) {
+    constructor(apiService, storageService) {
       console.log("app loaded");
       this._apiService = apiService;
-      this._dbServicePromise = dbService.init();
+      this._storageServicePromise = storageService.init();
     }
 
     async temperatureCtrl() {
-      const dbService = await this._dbServicePromise;
-      await dbService.temperatureSync();
+      const TABLE_NAME = "temperature";
+      const API_PATH = "temperature";
+      const storageService = await this._storageServicePromise;
+      const itemsIterator = (await storageService.isSyncNeeded(TABLE_NAME))
+        ? await storageService.syncTable(TABLE_NAME, API_PATH)
+        : await storageService.geTableIterator(TABLE_NAME);
 
-      console.log("temperatureCtrl");
+      for (let entry of itemsIterator) {
+        const e = await entry;
+        console.log(e);
+      }
     }
 
     async precipitationCtrl() {
-      const dbService = await this._dbServicePromise;
-      await dbService.precipitationSync();
+      //   const storageService = await this._storageServicePromise;
+      //   await storageService.precipitationSync();
 
       console.log("precipitationCtrl");
     }
@@ -54,22 +61,26 @@
       return new Worker(this._workerPath);
     }
 
-    toDBFormat(serverData) {
+
+
+    serverToDBFormat(serverData) {
       const worker = this._getNewWorker();
-      const iterator = function*(data) {
-        for (let key in data) {
-          yield {key, value: data[key]};
-        }
-      };
+      const iteratorFactory = data =>
+        function*() {
+          for (let key in data) {
+            yield { key, value: data[key] };
+          }
+        };
 
       worker.postMessage(serverData);
 
       return new Promise(resolve => {
         worker.onmessage = event => {
           if (!event.data) {
-            throw new Error("toDBFormat error: result is empty");
+            throw new Error("serverToDBFormat error: result is empty");
           }
-          resolve(iterator(event.data));
+          console.log("worker message got");
+          resolve(iteratorFactory(event.data));
         };
       });
     }
@@ -99,7 +110,8 @@
           throw new Error("Error loading database (opening)");
         };
         DBOpenRequest.onsuccess = event => {
-          this._initTransactionsFactory(this._db = DBOpenRequest.result);
+          this._db = DBOpenRequest.result;
+          this._transactoinsFactory = this._getTransactionsFactory(this._db);
           this._db.onclose = () => this.init();
           resolve(this);
         };
@@ -109,61 +121,55 @@
       });
     }
 
-    temperatureSync() {
-      return this._syncTable("temperature", "temperature");
-    }
-
-    precipitationSync() {
-      return this._syncTable("precipitation", "precipitation");
-    }
-
-    temperatureRangeGen(lowerKey, upperKey) {
-      return this._getRangeGenerator("temperature", lowerKey, upperKey);
-    }
-
-    precipitationRangeGen(lowerKey, upperKey) {
-      return this._getRangeGenerator("precipitation", lowerKey, upperKey);
-    }
-
-    _getRangeGenerator(objStoreName, lowerKey, upperKey) {
+    async geTableIterator(objStoreName, lowerKey, upperKey) {
       const transaction = this._transactoinsFactory[objStoreName]();
-      const index = transaction.index("yearMonth");
-      const boundKeyRange = this._IDBKeyRange.bound(
-        lowerKey,
-        upperKey,
-        false,
-        false
-      );
-      const iterator = function*(cursor) {
-        if (cursor) {
-          yield cursor;
+      const boundKeyRange =
+        lowerKey && upperKey
+          ? this._IDBKeyRange.bound(lowerKey, upperKey, false, false)
+          : null;
+
+      const openedCursor = transaction.openCursor(boundKeyRange);
+      const openedCursorPromiseFactory = () =>
+        new Promise(resolve => {
+          openedCursor.onsuccess = event => {
+            resolve(event.target.result);
+          };
+        }).then(cursor => {
+          if (!cursor) {
+              throw new Error("cursor end")
+          }
           cursor.continue();
+          return cursor;
+        });
+
+      const iterator = function*() {
+        let end = false;
+        while (!end) {
+          yield openedCursorPromiseFactory()
+            .catch(() => {
+              end = true;
+            });
         }
       };
 
-      return new Promise(resolve => {
-        index.openCursor(boundKeyRange).onsuccess = event => {
-          const cursor = event.target.result;
-          resolve(iterator(cursor));
-        };
-      });
+      return iterator();
     }
 
-    async _syncTable(objStoreName, apiPath) {
-      const isSyncNeeded = await this._isSyncNeeded(objStoreName);
-      if (!isSyncNeeded) {
-        return;
-      }
-
+    async syncTable(objStoreName, apiPath) {
+      //todo: опустошать таблицу сначала
       const serverData = await this._ApiService.fetch(apiPath);
-      const iterator = await this._TransformService.toDBFormat(serverData);
+      const iterator = await this._TransformService.serverToDBFormat(serverData);
       const transaction = this._transactoinsFactory[objStoreName]();
-      for (let entry of iterator) {
-        transaction.add(entry.value, entry.key);
-      }
+      const decoratedIterator = function*(iterator, transaction) {
+        for (let entry of iterator) {
+          yield Promise.resolve(entry);
+          transaction.add(entry.value, entry.key);
+        }
+      };
+      return decoratedIterator(iterator(), transaction);
     }
 
-    _isSyncNeeded(objStoreName) {
+    isSyncNeeded(objStoreName) {
       const transaction = this._transactoinsFactory[objStoreName]();
       const countRequest = transaction.count();
       return new Promise(resolve => {
@@ -173,8 +179,8 @@
       });
     }
 
-    _initTransactionsFactory(db) {
-      this._transactoinsFactory = Object.create(
+    _getTransactionsFactory(db) {
+      return Object.create(
         {},
         {
           ["temperature"]: {
@@ -213,17 +219,26 @@
     transformService
   );
 
-  const app = new App(apiService, storageService);
+  const appPromise = new Promise(resolve => {
+    w.document.addEventListener("DOMContentLoaded", () => {
+      resolve(new App(apiService, storageService));
+    });
+  });
 
   w.addEventListener("routeChanged", async event => {
     if (!event.detail.state) {
       console.error("Router error: can't find state object");
       return;
     }
-    if (typeof app[event.detail.state.controller] !== "function") {
+
+    const app = await appPromise;
+    const controllerName = event.detail.state.controller;
+
+    if (typeof app[controllerName] !== "function") {
       console.error("Router error: can't find controller");
       return;
     }
-    app[event.detail.state.controller]();
+
+    app[controllerName]();
   });
 })(window);
