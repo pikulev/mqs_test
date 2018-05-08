@@ -1,5 +1,22 @@
 onmessage = event => {
+    const TIME_KEY = "t";
+    const TIME_SPLITTER = "-";
+    const VALUE_KEY = "v";
+
     console.log('Message received from main script', event);
-    console.log('Posting message back to main script');
-    postMessage([{key: "1900-10", value: {1: 1, 2: 2}}, {key: "1900-11", value: {1: 1, 2: 2}}]);
+    let result = null;
+
+    for (let i = 0; i < event.data.length; i++) {
+        const t = event.data[i][TIME_KEY].split(TIME_SPLITTER);
+        const day = t.pop();
+        const yearMonth = t.join(TIME_SPLITTER);
+
+        result = result || {}
+        result[yearMonth] = result[yearMonth] || [];
+
+        result[yearMonth].push(event.data[i])
+    }
+
+    postMessage(result);
+    console.log('Message posted back to main script');
   }

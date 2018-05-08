@@ -57,8 +57,8 @@
     toDBFormat(serverData) {
       const worker = this._getNewWorker();
       const iterator = function*(data) {
-        for (let i = 0; i < data.length; i++) {
-          yield data[i];
+        for (let key in data) {
+          yield {key, value: data[key]};
         }
       };
 
@@ -66,7 +66,7 @@
 
       return new Promise(resolve => {
         worker.onmessage = event => {
-          if (!event.data || !event.data.length) {
+          if (!event.data) {
             throw new Error("toDBFormat error: result is empty");
           }
           resolve(iterator(event.data));
@@ -98,13 +98,14 @@
         DBOpenRequest.onerror = event => {
           throw new Error("Error loading database (opening)");
         };
-        DBOpenRequest.onsuccess = async event => {
-          this._db = DBOpenRequest.result;
-          this._initTransactionsFactory(this._db);
+        DBOpenRequest.onsuccess = event => {
+          this._initTransactionsFactory(this._db = DBOpenRequest.result);
+          this._db.onclose = () => this.init();
           resolve(this);
         };
-        DBOpenRequest.onupgradeneeded = event =>
+        DBOpenRequest.onupgradeneeded = event => {
           this._onupgradeneeded(event.target.result);
+        };
       });
     }
 
@@ -121,7 +122,7 @@
     }
 
     precipitationRangeGen(lowerKey, upperKey) {
-      return this._getRangeGenerator("temperature", lowerKey, upperKey);
+      return this._getRangeGenerator("precipitation", lowerKey, upperKey);
     }
 
     _getRangeGenerator(objStoreName, lowerKey, upperKey) {
@@ -158,7 +159,6 @@
       const iterator = await this._TransformService.toDBFormat(serverData);
       const transaction = this._transactoinsFactory[objStoreName]();
       for (let entry of iterator) {
-        console.log("add", entry);
         transaction.add(entry.value, entry.key);
       }
     }
