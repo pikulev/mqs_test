@@ -66,43 +66,51 @@
   class TransformService {
     constructor() {
       this._serverToDbWorker = new Worker("/assets/workers/transform-to-db.js");
+      this._serverToDbWorkerOnMessage = this._getOnMessagePromise(
+        this._serverToDbWorker
+      );
+
       this._dbToAppWorker = new Worker("/assets/workers/transform-to-app.js");
+      this._dbToAppWorkerOnMessage = this._getOnMessagePromise(
+        this._dbToAppWorker
+      );
     }
 
-    serverToDBFormat(serverData) {
-      return this._getResultIterator(serverData, this._serverToDbWorker);
+    _getOnMessagePromise(worker) {
+      return new Promise(resolve => (worker.onmessage = resolve));
     }
 
-    dbToCanvasFormat(dbData) {
-      return this._getResultIterator(dbData, this._dbToAppWorker);
+    serverToDBFormat(serverData, promisesLen) {
+      return this._getResultIterator(
+        serverData,
+        promisesLen,
+        this._serverToDbWorker,
+        this._serverToDbWorkerOnMessage
+      );
     }
 
-    _getResultIterator(data, worker) {
+    dbToCanvasFormat(dbData, promisesLen) {
+      return this._getResultIterator(
+        dbData,
+        promisesLen,
+        this._dbToAppWorker,
+        this._dbToAppWorkerOnMessage
+      );
+    }
+
+    _getResultIterator(data, promisesLen, worker, onMessagePromise) {
       worker.postMessage(data);
 
-      const iteratorFactory = limit =>
-        function*() {
-          let countdown = limit;
+      const iteratorFactory = (limit, onMessagePromise) => {
+        return function*() {
+          console.log("-=-=-=-");
+          for (let i = 0; i < limit; i++) {
+            yield onMessagePromise;
+          }
+        };
+      };
 
-          while (countdown-- > 0) {
-            console.log(countdown);
-            yield new Promise(resolve => {
-              worker.onmessage = event => {
-                resolve(event.data.result);
-              };
-            });
-          }
-        };
-      console.log("..");
-      return new Promise(resolve => {
-        worker.onmessage = event => {
-          if (!event.data.len) {
-            return;
-          }
-          console.log(event.data.len);
-          resolve(iteratorFactory(event.data.len));
-        };
-      });
+      return iteratorFactory(promisesLen, onMessagePromise);
     }
   }
 
@@ -156,9 +164,10 @@
 
       for (let i = 0; i < tableEntries.length; i++) {
         console.log("->", i);
-        transformPomises[i] = (await this._TransformService.dbToCanvasFormat(
-          tableEntries[i].value
-        ))();
+        transformPomises[i] = this._TransformService.dbToCanvasFormat(
+          tableEntries[i].value,
+          tableEntries.length
+        )();
       }
 
       const iterator = function*() {
@@ -204,9 +213,9 @@
     async syncAndGetItemsIterator(objStoreName, apiPath) {
       //todo: опустошать таблицу сначала
       const serverData = await this._ApiService.fetch(apiPath);
-      const tableObjectIt = (await this._TransformService.serverToDBFormat(
-        serverData
-      ))().next();
+      const tableObjectIt = this._TransformService
+        .serverToDBFormat(serverData, 1)()
+        .next();
       const tableObject = await tableObjectIt.value;
 
       const transformPomises = this._UtilsService.getObjArray(
@@ -214,9 +223,10 @@
       );
       let i = 0;
       for (let key in tableObject) {
-        transformPomises[i++] = (await this._TransformService.dbToCanvasFormat(
-          tableObject[key]
-        ))();
+        transformPomises[i++] = this._TransformService.dbToCanvasFormat(
+          tableObject[key],
+          Object.keys(tableObject).length
+        );
       }
 
       const iteratorFactory = transactoinsFactory =>

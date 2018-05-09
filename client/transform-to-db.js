@@ -3,8 +3,6 @@ onmessage = event => {
   const TIME_SPLITTER = "-";
   const VALUE_KEY = "v";
 
-  postMessage({ len: 1 });
-
   let result = null;
   for (let i = 0; i < event.data.length; i++) {
     const t = event.data[i][TIME_KEY].split(TIME_SPLITTER);
@@ -16,5 +14,5 @@ onmessage = event => {
 
     result[yearMonth].push(event.data[i]);
   }
-  postMessage({ result });
+  postMessage(result);
 };
