@@ -17,37 +17,33 @@
     async temperatureCtrl() {
       const TABLE_NAME = "temperature";
       const API_PATH = "temperature";
-      const entires = await this._getEntriesIterator(TABLE_NAME, API_PATH);
-      for (let entry of entires) {
-        const e = await entry;
-        console.log(e);
-        // тут может быть undefined в e;
-        const items = await this._transformService.dbToAppFormat([e]);
-        for (let item of items()) {
-          console.log(item);
-        }
+      const iterator = await this._getItemsIterator(TABLE_NAME, API_PATH);
+      const items = [];
+      for (let i of iterator()) {
+        const item = await i;
+        items.push(item);
       }
+      console.log(items.length);
     }
 
     async precipitationCtrl() {
       const TABLE_NAME = "precipitation";
       const API_PATH = "precipitation";
-      const entires = await this._getEntriesIterator(TABLE_NAME, API_PATH);
-      for (let entry of entires) {
-        const e = await entry;
-        const items = await this._transformService.dbToAppFormat([e]);
-        for (let item of items()) {
-          console.log(item);
-        }
+      const iterator = await this._getItemsIterator(TABLE_NAME, API_PATH);
+      const items = [];
+      for (let i of iterator()) {
+        const item = await i;
+        items.push(item);
       }
+      console.log(items.length);
     }
 
-    async _getEntriesIterator(tableName, apiPath) {
+    async _getItemsIterator(tableName, apiPath) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
       return isSyncNeeded
-        ? await storageService.syncTable(tableName, apiPath)
-        : await storageService.geTableIterator(tableName);
+        ? await storageService.syncAndGetItemsIterator(tableName, apiPath)
+        : await storageService.getItemsIterator(tableName);
     }
   }
 
@@ -69,49 +65,42 @@
   // отсортировать все приватные/публичные
   class TransformService {
     constructor() {
-      this._SERVER_TO_DB_WORKER_PATH = "/assets/workers/transform-to-db.js";
-      this._DB_TO_APP_WORKER_PATH = "/assets/workers/transform-to-app.js";
+      this._serverToDbWorker = new Worker("/assets/workers/transform-to-db.js");
+      this._dbToAppWorker = new Worker("/assets/workers/transform-to-app.js");
     }
 
-    async serverToDBFormat(serverData) {
-      const iteratorFactory = data =>
-        function*() {
-          for (let key in data) {
-            yield { key, value: data[key] };
-          }
-        };
-      return await this._getResultIterator(
-        serverData,
-        this._SERVER_TO_DB_WORKER_PATH,
-        iteratorFactory
-      );
+    serverToDBFormat(serverData) {
+      return this._getResultIterator(serverData, this._serverToDbWorker);
     }
 
-    async dbToAppFormat(dbData) {
-      const iteratorFactory = data =>
-        function*() {
-          for (let item of data) {
-            yield item;
-          }
-        };
-      return await this._getResultIterator(
-        dbData,
-        this._DB_TO_APP_WORKER_PATH,
-        iteratorFactory
-      );
+    dbToCanvasFormat(dbData) {
+      return this._getResultIterator(dbData, this._dbToAppWorker);
     }
 
-    _getResultIterator(data, workerPath, iteratorFactory) {
-      const worker = new Worker(workerPath);
+    _getResultIterator(data, worker) {
       worker.postMessage(data);
 
+      const iteratorFactory = limit =>
+        function*() {
+          let countdown = limit;
+
+          while (countdown-- > 0) {
+            console.log(countdown);
+            yield new Promise(resolve => {
+              worker.onmessage = event => {
+                resolve(event.data.result);
+              };
+            });
+          }
+        };
+      console.log("..");
       return new Promise(resolve => {
         worker.onmessage = event => {
-          if (!event.data) {
-            throw new Error("serverToDBFormat error: result is empty");
+          if (!event.data.len) {
+            return;
           }
-          console.log("worker message got");
-          resolve(iteratorFactory(event.data));
+          console.log(event.data.len);
+          resolve(iteratorFactory(event.data.len));
         };
       });
     }
@@ -123,7 +112,8 @@
       indexedDB,
       IDBKeyRange,
       ApiService,
-      TransformService
+      TransformService,
+      UtilsService
     ) {
       this.version = version;
       this.dbName = dbName;
@@ -131,6 +121,7 @@
       this._IDBKeyRange = IDBKeyRange;
       this._ApiService = ApiService;
       this._TransformService = TransformService;
+      this._UtilsService = UtilsService;
     }
 
     init() {
@@ -152,78 +143,108 @@
       });
     }
 
-    async geTableIterator(objStoreName, lowerKey, upperKey) {
-      const transaction = this._transactoinsFactory[objStoreName]();
+    async getItemsIterator(objStoreName, lowerKey, upperKey) {
+      const tableEntries = await this._getTableEntries(
+        objStoreName,
+        lowerKey,
+        upperKey
+      );
+
+      const transformPomises = this._UtilsService.getObjArray(
+        tableEntries.length
+      );
+
+      for (let i = 0; i < tableEntries.length; i++) {
+        console.log("->", i);
+        transformPomises[i] = (await this._TransformService.dbToCanvasFormat(
+          tableEntries[i].value
+        ))();
+      }
+
+      const iterator = function*() {
+        for (let i = 0; i < tableEntries.length; i++) {
+          for (let promise of transformPomises[i]) {
+            yield promise;
+          }
+        }
+      };
+
+      return iterator;
+    }
+
+    async _getTableEntries(objStoreName, lowerKey, upperKey) {
       const boundKeyRange =
         lowerKey && upperKey
           ? this._IDBKeyRange.bound(lowerKey, upperKey, false, false)
           : null;
 
-      const openedCursor = transaction.openCursor(boundKeyRange);
-      let continueCursor = new Function();
-      const openedCursorPromiseFactory = () => {
-        return new Promise(resolve => {
-          openedCursor.onsuccess = event => {
-            resolve(event.target.result);
-            console.log(event.target.result, continueCursor);
-          };
-        }).then(cursor => {
-          if (!cursor) {
-            throw new Error("cursor end");
-          }
-          const dbEntry = { key: cursor.key, value: cursor.value };
-          console.log("dbEntry", dbEntry);
-          continueCursor = cursor.continue;
-          return dbEntry;
-        });
-      };
+      const count = await this.count(objStoreName, boundKeyRange);
+      const result = this._UtilsService.getObjArray(count);
 
-      const iterator = function*(continueCursor) {
-        let end = false;
-        while (!end) {
-          const entryPromise = openedCursorPromiseFactory().catch(err => {
-            console.error(err);
-            end = true;
-          });
-          yield entryPromise;
-          console.log('continueCursor', continueCursor);
-          continueCursor();
+      const cursorHandlerFactory = (resolve, index) => event => {
+        const cursor = event.target.result;
+        if (!cursor) {
+          resolve(result);
+          return;
         }
+        result[index++] = { key: cursor.key, value: cursor.value };
+        cursor.continue();
       };
 
-      return iterator(continueCursor);
+      return new Promise(resolve => {
+        let index = 0;
+        const transaction = this._transactoinsFactory[objStoreName]();
+        transaction.openCursor(boundKeyRange).onsuccess = cursorHandlerFactory(
+          resolve,
+          index
+        );
+      });
     }
 
-    async syncTable(objStoreName, apiPath) {
+    async syncAndGetItemsIterator(objStoreName, apiPath) {
       //todo: опустошать таблицу сначала
       const serverData = await this._ApiService.fetch(apiPath);
-      const iterator = await this._TransformService.serverToDBFormat(
+      const tableObjectIt = (await this._TransformService.serverToDBFormat(
         serverData
-      );
+      ))().next();
+      const tableObject = await tableObjectIt.value;
 
-      const decoratedIterator = function*(iterator, transactoinsFactory) {
-        for (let entry of iterator) {
-          const transaction = transactoinsFactory();
-          const addRequest = transaction.add(entry.value, entry.key);
-          yield new Promise(resolve => {
-            addRequest.onsuccess = () => {
-              resolve(entry);
-            };
-          });
-        }
-      };
-      return decoratedIterator(
-        iterator(),
-        this._transactoinsFactory[objStoreName]
+      const transformPomises = this._UtilsService.getObjArray(
+        Object.keys(tableObject).length
       );
+      let i = 0;
+      for (let key in tableObject) {
+        transformPomises[i++] = (await this._TransformService.dbToCanvasFormat(
+          tableObject[key]
+        ))();
+      }
+
+      const iteratorFactory = transactoinsFactory =>
+        function*() {
+          let i = 0;
+          for (let key in tableObject) {
+            const transaction = transactoinsFactory();
+            transaction.add(tableObject[key], key);
+            for (let itemPromise of transformPomises[i++]) {
+              yield itemPromise;
+            }
+          }
+        };
+
+      return iteratorFactory(this._transactoinsFactory[objStoreName]);
     }
 
-    isSyncNeeded(objStoreName) {
+    async isSyncNeeded(objStoreName) {
+      const count = await this.count(objStoreName);
+      return count === 0;
+    }
+
+    count(objStoreName, query) {
       const transaction = this._transactoinsFactory[objStoreName]();
-      const countRequest = transaction.count();
+      const countRequest = transaction.count(query);
       return new Promise(resolve => {
         countRequest.onsuccess = () => {
-          resolve(countRequest.result === 0);
+          resolve(countRequest.result);
         };
       });
     }
@@ -258,6 +279,15 @@
     }
   }
 
+  class UtilsService {
+    constructor() {}
+
+    getObjArray(count) {
+      return Array.apply(null, Array(count)).map(Object.prototype.valueOf, {});
+    }
+  }
+
+  const utilsService = new UtilsService();
   const apiService = new ApiService(API_URL);
   const transformService = new TransformService();
   const storageService = new StorageService(
@@ -265,7 +295,8 @@
     w.indexedDB,
     w.IDBKeyRange,
     apiService,
-    transformService
+    transformService,
+    utilsService
   );
 
   const appPromise = new Promise(resolve => {
