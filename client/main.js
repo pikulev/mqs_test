@@ -10,17 +10,18 @@
     constructor(document, canvasId, width, height) {
       this._canvas = document.getElementById(canvasId);
       this._context = this._canvas.getContext("2d");
-      this._width = width;
-      this._height = height;
+
+      this.width = width;
+      this.height = height;
 
       // grid
-      for (let x = 0.5; x <= this._width; x += 20) {
+      for (let x = 0.5; x <= this.width; x += 20) {
         this._context.moveTo(x, 0);
-        this._context.lineTo(x, this._height);
+        this._context.lineTo(x, this.height);
       }
-      for (let y = 0.5; y <= this._height; y += 20) {
+      for (let y = 0.5; y <= this.height; y += 20) {
         this._context.moveTo(0, y);
-        this._context.lineTo(this._width, y);
+        this._context.lineTo(this.width, y);
       }
 
       this._context.strokeStyle = "#eee";
@@ -29,11 +30,11 @@
 
     *draw(data, dataLength) {
       this._context.beginPath();
-      this._context.moveTo(0, this._height / 2);
-      const dataDensity = dataLength / this._width;
+      this._context.moveTo(0, this.height / 2);
+      const dataDensity = dataLength / this.width;
 
-      for (let i = 0; i < this._width; i += 1) {
-        this._context.lineTo(i, (yield) + this._height / 2);
+      for (let i = 0; i < this.width; i += 1) {
+        this._context.lineTo(i, (yield) + this.height / 2);
       }
       this._context.strokeStyle = "#999";
       this._context.stroke();
@@ -56,7 +57,8 @@
         TABLE_NAME,
         API_PATH,
         lowerKey,
-        upperKey
+        upperKey,
+        this._canvasDrawer.width
       );
       const items = [];
       const drawIterator = this._canvasDrawer.draw(46020);
@@ -74,7 +76,8 @@
         TABLE_NAME,
         API_PATH,
         lowerKey,
-        upperKey
+        upperKey,
+        this._canvasDrawer.width
       );
       const items = [];
       const drawIterator = this._canvasDrawer.draw(46020);
@@ -85,12 +88,23 @@
       console.log(items.length);
     }
 
-    async _getItemsIterator(tableName, apiPath, lowerKey, upperKey) {
+    async _getItemsIterator(
+      tableName,
+      apiPath,
+      lowerKey,
+      upperKey,
+      averageToLimit
+    ) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
       return isSyncNeeded
         ? await storageService.syncAndGetItemsIterator(tableName, apiPath)
-        : await storageService.getItemsIterator(tableName, lowerKey, upperKey);
+        : await storageService.getItemsIterator(
+            tableName,
+            lowerKey,
+            upperKey,
+            averageToLimit
+          );
     }
   }
 
@@ -125,36 +139,40 @@
         ).then(event => event.data);
     }
 
-    serverToDBFormat(serverData, promisesLen) {
+    serverToDBFormat(serverData, chunkSize) {
       return this._getResultIterator(
         serverData,
-        promisesLen,
+        chunkSize,
         this._serverToDbWorker
       );
     }
 
-    dbToCanvasFormat(dbData, promisesLen) {
-      return this._getResultIterator(dbData, promisesLen, this._dbToAppWorker);
+    dbToCanvasFormat(dbData, chunkSize) {
+      return this._getResultIterator(dbData, chunkSize, this._dbToAppWorker);
     }
 
-    _getResultIterator(data, promisesLen, worker) {
-      const results = this._UtilsService.getObjArray(promisesLen);
+    _getResultIterator(values, chunkSize = 1, worker) {
+      const results = this._UtilsService.getObjArray(
+        Math.ceil(values.length / chunkSize)
+      );
+
       const iterator = function*() {
         for (let i = 0; i < results.length; i++) {
           yield results[i];
         }
       };
-      worker.postMessage(data);
+
+      worker.postMessage({ values, chunkSize });
 
       return new Promise(resolve => {
         let resultsCounter = 0;
         worker.onmessage = event => {
-          if (resultsCounter > promisesLen) {
+          if (resultsCounter > results.length) {
             return;
           }
 
           results[resultsCounter++] = event.data;
-          if (resultsCounter === promisesLen) {
+          if (resultsCounter === results.length) {
             resolve(iterator);
           }
         };
@@ -199,7 +217,7 @@
       });
     }
 
-    async getItemsIterator(objStoreName, lowerKey, upperKey) {
+    async getItemsIterator(objStoreName, lowerKey, upperKey, averageToLimit) {
       const tableEntries = await this._getTableEntries(
         objStoreName,
         lowerKey,
@@ -209,10 +227,14 @@
       const transformPomises = this._UtilsService.getObjArray(
         tableEntries.length
       );
+      const chunkSize = averageToLimit
+        ? Math.ceil(tableEntries.length / averageToLimit)
+        : 1;
+
       for (let i = 0; i < tableEntries.length; i++) {
         transformPomises[i] = await this._TransformService.dbToCanvasFormat(
           tableEntries[i].value,
-          tableEntries[i].value.length
+          chunkSize
         );
       }
 
@@ -272,7 +294,7 @@
       for (let key in tableObject) {
         transformPomises[i++] = await this._TransformService.dbToCanvasFormat(
           tableObject[key],
-          Object.keys(tableObject[key]).length
+          1
         );
       }
 

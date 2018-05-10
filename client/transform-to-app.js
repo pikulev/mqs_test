@@ -1,5 +1,18 @@
 onmessage = event => {
-  for (let i = 0; i < event.data.length; i++) {
-    postMessage({ label: event.data[i].t, value: event.data[i].v });
+  const values = getAveragedValues(event.data.values, event.data.chunkSize);
+
+  for (let i = 0; i < values.length; i++) {
+    postMessage({ label: values[i].t, value: values[i].v });
   }
 };
+
+function getAveragedValues(array, chunkSize) {
+  return Array(Math.ceil(array.length / chunkSize))
+    .fill()
+    .map((_, i) => array.slice(i * chunkSize, i * chunkSize + chunkSize))
+    .map(chunk => {
+      const chunkLength = chunk.length;
+      const sum = chunk.reduce((prev, next) => prev + next.v, 0);
+      return sum / chunkLength;
+    });
+}
