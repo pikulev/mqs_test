@@ -39,8 +39,11 @@
       this._context.beginPath();
       this._context.moveTo(0, this.height / 2);
 
-      for (let i = 0; i < this.width - 1; i += 1) {
-        this._context.lineTo(i, (yield) + this.height / 2);
+      let value;
+      let i = 0;
+      while (value !== null) {
+        value = yield;
+        this._context.lineTo(i++, value + this.height / 2);
       }
       this._context.strokeStyle = "#999";
       this._context.stroke();
@@ -48,52 +51,88 @@
   }
 
   class App {
-    constructor(apiService, storageService, transformService, canvasDrawer) {
+    constructor(
+      apiService,
+      storageService,
+      transformService,
+      canvasDrawer,
+      fromSelectElement,
+      toSelectElement
+    ) {
       console.log("app loaded");
       this._apiService = apiService;
       this._storageServicePromise = storageService.init();
       this._transformService = transformService;
       this._canvasDrawer = canvasDrawer;
+
+      this._fromSelectElement = fromSelectElement;
+      this._toSelectElement = toSelectElement;
+      this._fromSelectElement.onchange = () => this._onToOptionSelectHandler();
+      this._toSelectElement.onchange = () => this._onToOptionSelectHandler();
+      this._updateOptions(1881, 2006);
     }
 
-    async temperatureCtrl(lowerKey, upperKey) {
+    temperatureCtrl(lowerKey, upperKey) {
       const TABLE_NAME = "temperature";
       const API_PATH = "temperature";
+      this._updateItems(TABLE_NAME, API_PATH, lowerKey, upperKey);
+    }
+
+    precipitationCtrl(lowerKey, upperKey) {
+      const TABLE_NAME = "precipitation";
+      const API_PATH = "precipitation";
+      this._updateItems(TABLE_NAME, API_PATH, lowerKey, upperKey);
+    }
+
+    async _updateItems(tableName, apiPath) {
       const iterator = await this._getItemsIterator(
-        TABLE_NAME,
-        API_PATH,
-        lowerKey,
-        upperKey,
+        tableName,
+        apiPath,
+        this._selectedOptions.fromValue,
+        this._selectedOptions.toValue,
         this._canvasDrawer.width
       );
       const items = [];
       const drawIterator = this._canvasDrawer.draw();
+
       for (let i of iterator()) {
         drawIterator.next(i.value);
         items.push(i);
       }
-
+      drawIterator.next(null);
       console.log(items.length);
     }
 
-    async precipitationCtrl(lowerKey, upperKey) {
-      const TABLE_NAME = "precipitation";
-      const API_PATH = "precipitation";
-      const iterator = await this._getItemsIterator(
-        TABLE_NAME,
-        API_PATH,
-        lowerKey,
-        upperKey,
-        this._canvasDrawer.width
-      );
-      const items = [];
-      const drawIterator = this._canvasDrawer.draw();
-      for (let i of iterator()) {
-        drawIterator.next(i.value);
-        items.push(i);
+    _updateOptions(fromYear, toYear) {
+      const years = Array(toYear - fromYear + 1)
+        .fill()
+        .map((_, i) => fromYear + i);
+
+      const fill = (el, year) => {
+        const option = document.createElement("option");
+        option.setAttribute("data-from-value", `${year}-01-01`);
+        option.setAttribute("data-to-value", `${year}-12-31`);
+        option.innerHTML = year;
+        el.appendChild(option);
+      };
+
+      for (let i = 0; i < years.length; i++) {
+        fill(this._fromSelectElement, years[i]);
+      }
+      for (let i = years.length; i--; ) {
+        fill(this._toSelectElement, years[i]);
       }
 
-      console.log(items.length);
+      this._selectedOptions = {};
+    }
+
+    _onToOptionSelectHandler() {
+      console.log(this._selectedOptions);
+      this._selectedOptions = {
+        fromValue: this._fromSelectElement.selectedOptions[0].dataset.fromValue,
+        toValue: this._toSelectElement.selectedOptions[0].dataset.toValue
+      };
+      w.reloadCurrentRoute();
     }
 
     async _getItemsIterator(
@@ -105,6 +144,7 @@
     ) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
+
       if (isSyncNeeded) {
         const a = await storageService.sync(tableName, apiPath);
       }
@@ -245,10 +285,10 @@
         tableEntries.length
       );
       const chunkSize = averageToLimit
-        ? Math.ceil((tableEntries.length * 31) / averageToLimit)
+        ? Math.ceil(tableEntries.length * 31 / averageToLimit)
         : 1;
 
-      console.log(chunkSize, averageToLimit, tableEntries.length );
+      console.log(chunkSize, averageToLimit, tableEntries.length);
 
       for (let i = 0; i < tableEntries.length; i++) {
         transformPomises[i] = await this._TransformService.dbToCanvasFormat(
@@ -405,14 +445,20 @@
 
   const appPromise = new Promise(resolve => {
     w.document.addEventListener("DOMContentLoaded", () => {
-      const canvasDrawer = new CanvasDrawer(
-        w.document.getElementById("canvas")
-      );
+      const canvasEl = w.document.getElementById("canvas");
+      const fromSelectEl = w.document.getElementById("from-select");
+      const toSelectEl = w.document.getElementById("to-select");
+
+      const canvasDrawer = new CanvasDrawer(canvasEl);
+
       const app = new App(
         apiService,
         storageService,
         transformService,
-        canvasDrawer
+        canvasDrawer,
+
+        fromSelectEl,
+        toSelectEl
       );
       resolve(app);
     });
