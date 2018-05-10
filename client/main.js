@@ -7,14 +7,20 @@
   };
 
   class CanvasDrawer {
-    constructor(document, canvasId, width, height) {
-      this._canvas = document.getElementById(canvasId);
+    constructor(canvas) {
+      this._canvas = canvas;
       this._context = this._canvas.getContext("2d");
 
-      this.width = width;
-      this.height = height;
+      this.width = this._canvas.width;
+      this.height = this._canvas.height;
 
-      // grid
+      this.clear();
+    }
+
+    clear() {
+      this._context.clearRect(0, 0, this.width, this.height);
+      this._context.beginPath();
+
       for (let x = 0.5; x <= this.width; x += 20) {
         this._context.moveTo(x, 0);
         this._context.lineTo(x, this.height);
@@ -28,12 +34,12 @@
       this._context.stroke();
     }
 
-    *draw(data, dataLength) {
+    *draw() {
+      this.clear();
       this._context.beginPath();
       this._context.moveTo(0, this.height / 2);
-    //   const dataDensity = dataLength / this.width;
 
-      for (let i = 0; i < dataLength; i += 1) {
+      for (let i = 0; i < this.width; i += 1) {
         this._context.lineTo(i, (yield) + this.height / 2);
       }
       this._context.strokeStyle = "#999";
@@ -61,9 +67,10 @@
         this._canvasDrawer.width
       );
       const items = [];
-      const drawIterator = this._canvasDrawer.draw(500);
+      const drawIterator = this._canvasDrawer.draw();
       for (let i of iterator()) {
         drawIterator.next(i.value);
+        items.push(i);
       }
 
       console.log(items.length);
@@ -80,9 +87,10 @@
         this._canvasDrawer.width
       );
       const items = [];
-      const drawIterator = this._canvasDrawer.draw(500);
+      const drawIterator = this._canvasDrawer.draw();
       for (let i of iterator()) {
         drawIterator.next(i.value);
+        items.push(i);
       }
 
       console.log(items.length);
@@ -97,14 +105,16 @@
     ) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
-      return isSyncNeeded
-        ? await storageService.syncAndGetItemsIterator(tableName, apiPath)
-        : await storageService.getItemsIterator(
-            tableName,
-            lowerKey,
-            upperKey,
-            averageToLimit
-          );
+      if (isSyncNeeded) {
+        const a = await storageService.sync(tableName, apiPath);
+      }
+
+      return storageService.getItemsIterator(
+        tableName,
+        lowerKey,
+        upperKey,
+        averageToLimit
+      );
     }
   }
 
@@ -141,19 +151,25 @@
 
     serverToDBFormat(serverData, chunkSize) {
       return this._getResultIterator(
+        this._serverToDbWorker,
         serverData,
         chunkSize,
-        this._serverToDbWorker
+        1
       );
     }
 
     dbToCanvasFormat(dbData, chunkSize) {
-      return this._getResultIterator(dbData, chunkSize, this._dbToAppWorker);
+      return this._getResultIterator(this._dbToAppWorker, dbData, chunkSize);
     }
 
-    _getResultIterator(values, chunkSize = 1, worker) {
+    _getResultIterator(
+      worker,
+      values,
+      chunkSize = 1,
+      resultsLength = values.length
+    ) {
       const results = this._UtilsService.getObjArray(
-        Math.ceil(values.length / chunkSize)
+        Math.ceil(resultsLength / chunkSize)
       );
 
       const iterator = function*() {
@@ -172,6 +188,7 @@
           }
 
           results[resultsCounter++] = event.data;
+
           if (resultsCounter === results.length) {
             resolve(iterator);
           }
@@ -228,7 +245,7 @@
         tableEntries.length
       );
       const chunkSize = averageToLimit
-        ? Math.ceil(tableEntries.length / averageToLimit)
+        ? Math.ceil(tableEntries.length * 31 / averageToLimit)
         : 1;
 
       for (let i = 0; i < tableEntries.length; i++) {
@@ -278,39 +295,30 @@
       });
     }
 
-    async syncAndGetItemsIterator(objStoreName, apiPath) {
+    async sync(objStoreName, apiPath) {
       //todo: опустошать таблицу сначала
       const serverData = await this._ApiService.fetch(apiPath);
-      const tableObjectIt = (await this._TransformService.serverToDBFormat(
+      const tableObjectIt = await this._TransformService.serverToDBFormat(
         serverData,
         1
-      ))().next();
-      const tableObject = tableObjectIt.value;
-
-      const transformPomises = this._UtilsService.getObjArray(
-        Object.keys(tableObject).length
       );
-      let i = 0;
-      for (let key in tableObject) {
-        transformPomises[i++] = await this._TransformService.dbToCanvasFormat(
-          tableObject[key],
-          1
-        );
+
+      const tableObject = tableObjectIt().next().value;
+      const keys = Object.keys(tableObject);
+      let transaction = null;
+
+      for (let lastIndex = keys.length - 1, i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        if (i === lastIndex) {
+          transaction.onsuccess = Promise.resolve;
+        }
+
+        transaction = this._transactoinsFactory[objStoreName]();
+        transaction.add(tableObject[key], key);
       }
 
-      const iteratorFactory = transactoinsFactory =>
-        function*() {
-          let i = 0;
-          for (let key in tableObject) {
-            const transaction = transactoinsFactory();
-            transaction.add(tableObject[key], key);
-            for (let itemPromise of transformPomises[i++]()) {
-              yield itemPromise;
-            }
-          }
-        };
-
-      return iteratorFactory(this._transactoinsFactory[objStoreName]);
+      return transaction.onsuccess;
     }
 
     async isSyncNeeded(objStoreName) {
@@ -395,7 +403,9 @@
 
   const appPromise = new Promise(resolve => {
     w.document.addEventListener("DOMContentLoaded", () => {
-      const canvasDrawer = new CanvasDrawer(w.document, "canvas", 501, 301);
+      const canvasDrawer = new CanvasDrawer(
+        w.document.getElementById("canvas")
+      );
       const app = new App(
         apiService,
         storageService,
