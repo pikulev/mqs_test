@@ -1,4 +1,4 @@
-# Вариант решения тестового задания для MetaQuotes Software
+# Тестовое задания MetaQuotes Software
 
 ## Запуск
 
