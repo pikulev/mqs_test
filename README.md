@@ -54,7 +54,7 @@ $ node server/server.js
 
 Реазилует общение с IndexedDB.
 
-#### [js/transform.js](client/js/transform.js)
+#### [js/transforms.js](client/js/transforms.js)
 
 Класс, который предоставляет методы взаимодействия с веб-воркерами.
 
