@@ -39,7 +39,7 @@
       this._context.beginPath();
       this._context.moveTo(0, this.height / 2);
 
-      for (let i = 0; i < this.width; i += 1) {
+      for (let i = 0; i < this.width - 1; i += 1) {
         this._context.lineTo(i, (yield) + this.height / 2);
       }
       this._context.strokeStyle = "#999";
@@ -245,8 +245,10 @@
         tableEntries.length
       );
       const chunkSize = averageToLimit
-        ? Math.ceil(tableEntries.length * 31 / averageToLimit)
+        ? Math.ceil((tableEntries.length * 31) / averageToLimit)
         : 1;
+
+      console.log(chunkSize, averageToLimit, tableEntries.length );
 
       for (let i = 0; i < tableEntries.length; i++) {
         transformPomises[i] = await this._TransformService.dbToCanvasFormat(
