@@ -53,8 +53,6 @@ export default class StorageService {
     const transformPomises = this._UtilsService.getObjArray(tableEntries.length);
     const chunkSize = averageToLimit ? Math.ceil(tableEntries.length * 31 / averageToLimit) : 1;
 
-    console.log(chunkSize, averageToLimit, tableEntries.length);
-
     for (let i = 0; i < tableEntries.length; i++) {
       // ждем обещания от трансформатора
       transformPomises[i] = await this._TransformService.dbToCanvasFormat(tableEntries[i].value, yScaleFactor, chunkSize);

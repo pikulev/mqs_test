@@ -1,4 +1,4 @@
-import { UtilsService, Deferred } from "/js/utils.js";
+import { UtilsService } from "/js/utils.js";
 import ApiService from "/js/api.js";
 import TransformService from "/js/transforms.js";
 import StorageService from "/js/storage.js";

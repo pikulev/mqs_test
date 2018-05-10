@@ -1,4 +1,10 @@
+/*
+  * Исполняет начальную настройку роутера и декларирует роуты
+  * 
+  * */
+
 (w => {
+  // ссылки роутера имеют аттрибут data-link
   const LINK_DATA_ATTRUBUTE = "link";
   const ACTIVE_LINK_CLASSNAME = "active";
 
@@ -22,6 +28,10 @@
   let currentRoute = null;
   let registeredLinks = [];
 
+  /*
+  * Фабрика обработчиков ссылок - конфигурируется роутом
+  * 
+  * */
   function getLinkClickHandler(route) {
     return event => {
       event.preventDefault();
@@ -36,6 +46,11 @@
     };
   }
 
+  /*
+  * Отдаст все линки, которые будет использовать роутер
+  * (с аттрибутами data-link)
+  * 
+  * */
   function getRegisteredLinks(attr, clickHandler) {
     const linksElements = w.document.querySelectorAll(`[data-${attr}]`);
     linksElements.forEach(el => {
@@ -44,6 +59,10 @@
     return linksElements;
   }
 
+  /*
+  * Устанавливает линк как активный, если находимся на нужном роуте
+  * 
+  * */
   function setActiveLink(linksElements, currentRoute, className = ACTIVE_LINK_CLASSNAME) {
     linksElements.forEach(el => {
       const linkToCurrentRoute = el.dataset[LINK_DATA_ATTRUBUTE] === currentRoute;
@@ -51,6 +70,10 @@
     });
   }
 
+  /*
+  * Переходит на указанный роут (умеет заменять историю)
+  * 
+  * */
   function goToRoute(route, replace = false) {
     if (route in ROUTES === false) {
       throw new Error(`Unknown route: ${route}`);
@@ -63,7 +86,6 @@
     });
     w.dispatchEvent(routeChangedEvent);
 
-    console.log("dispatched", ROUTES[route].title);
     currentRoute = route;
     setActiveLink(registeredLinks, currentRoute);
   }
@@ -72,9 +94,15 @@
     goToRoute(currentRoute, true, params);
   }
 
-  w.addEventListener("load", () => {
+  /*
+  * Инициализируем роут по готовности документа
+  * 
+  * */
+  w.document.addEventListener("DOMContentLoaded", () => {
     registeredLinks = getRegisteredLinks(LINK_DATA_ATTRUBUTE);
     goToRoute(startRoute in ROUTES ? startRoute : DEFAULT_ROUTE, true);
+
+    // стыдный проброс пметода для использования в контроллере приложения
     w.reloadCurrentRoute = reloadCurrentRoute;
   });
 })(window);

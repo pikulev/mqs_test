@@ -2,6 +2,10 @@ const BACKGROUND_COLOR = "#171717";
 const GRID_COLOR = "#1c1c1c";
 const LINE_COLOR = "#FF0041";
 
+/*
+  * CanvasDrawer
+  * 
+  * */
 export default class CanvasDrawer {
   constructor(canvas) {
     this._canvas = canvas;
@@ -13,6 +17,10 @@ export default class CanvasDrawer {
     this.clear();
   }
 
+  /*
+  * clear
+  * publis
+  * */
   clear() {
     this._context.fillStyle = BACKGROUND_COLOR;
     this._context.fillRect(0, 0, this.width, this.height);
@@ -31,6 +39,10 @@ export default class CanvasDrawer {
     this._context.stroke();
   }
 
+  /*
+  * Рисует последовательно все переданные в него данные
+  * public
+  * */
   *draw() {
     this.clear();
     this._context.beginPath();
