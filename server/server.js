@@ -84,7 +84,6 @@ function getErrorStr(msg) {
 }
 
 function getRouteTypeByURL(url) {
-  console.log(url)
   switch (url.indexOf("/") + 1) {
     case url.indexOf(ASSET_ROUTE_TYPE):
       return ASSET_ROUTE_TYPE;
