@@ -6,44 +6,91 @@
     version: 2
   };
 
+  class CanvasDrawer {
+    constructor(document, canvasId, width, height) {
+      this._canvas = document.getElementById(canvasId);
+      this._context = this._canvas.getContext("2d");
+      this._width = width;
+      this._height = height;
+
+      // grid
+      for (let x = 0.5; x <= this._width; x += 20) {
+        this._context.moveTo(x, 0);
+        this._context.lineTo(x, this._height);
+      }
+      for (let y = 0.5; y <= this._height; y += 20) {
+        this._context.moveTo(0, y);
+        this._context.lineTo(this._width, y);
+      }
+
+      this._context.strokeStyle = "#eee";
+      this._context.stroke();
+    }
+
+    *draw(data, dataLength) {
+      this._context.beginPath();
+      this._context.moveTo(0, this._height / 2);
+      const dataDensity = dataLength / this._width;
+
+      for (let i = 0; i < this._width; i += 1) {
+        this._context.lineTo(i, (yield) + this._height / 2);
+      }
+      this._context.strokeStyle = "#999";
+      this._context.stroke();
+    }
+  }
+
   class App {
-    constructor(apiService, storageService, transformService) {
+    constructor(apiService, storageService, transformService, canvasDrawer) {
       console.log("app loaded");
       this._apiService = apiService;
       this._storageServicePromise = storageService.init();
       this._transformService = transformService;
+      this._canvasDrawer = canvasDrawer;
     }
 
-    async temperatureCtrl() {
+    async temperatureCtrl(lowerKey, upperKey) {
       const TABLE_NAME = "temperature";
       const API_PATH = "temperature";
-      const iterator = await this._getItemsIterator(TABLE_NAME, API_PATH);
+      const iterator = await this._getItemsIterator(
+        TABLE_NAME,
+        API_PATH,
+        lowerKey,
+        upperKey
+      );
       const items = [];
+      const drawIterator = this._canvasDrawer.draw(46020);
       for (let i of iterator()) {
-        const item = await i;
-        items.push(item);
+        drawIterator.next(i.value);
       }
+
       console.log(items.length);
     }
 
-    async precipitationCtrl() {
+    async precipitationCtrl(lowerKey, upperKey) {
       const TABLE_NAME = "precipitation";
       const API_PATH = "precipitation";
-      const iterator = await this._getItemsIterator(TABLE_NAME, API_PATH);
+      const iterator = await this._getItemsIterator(
+        TABLE_NAME,
+        API_PATH,
+        lowerKey,
+        upperKey
+      );
       const items = [];
+      const drawIterator = this._canvasDrawer.draw(46020);
       for (let i of iterator()) {
-        const item = await i;
-        items.push(item);
+        drawIterator.next(i.value);
       }
+
       console.log(items.length);
     }
 
-    async _getItemsIterator(tableName, apiPath) {
+    async _getItemsIterator(tableName, apiPath, lowerKey, upperKey) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
       return isSyncNeeded
         ? await storageService.syncAndGetItemsIterator(tableName, apiPath)
-        : await storageService.getItemsIterator(tableName);
+        : await storageService.getItemsIterator(tableName, lowerKey, upperKey);
     }
   }
 
@@ -64,53 +111,54 @@
 
   // отсортировать все приватные/публичные
   class TransformService {
-    constructor() {
+    constructor(UtilsService) {
+      this._UtilsService = UtilsService;
       this._serverToDbWorker = new Worker("/assets/workers/transform-to-db.js");
-      this._serverToDbWorkerOnMessage = this._getOnMessagePromise(
-        this._serverToDbWorker
-      );
-
       this._dbToAppWorker = new Worker("/assets/workers/transform-to-app.js");
-      this._dbToAppWorkerOnMessage = this._getOnMessagePromise(
-        this._dbToAppWorker
-      );
     }
 
-    _getOnMessagePromise(worker) {
-      return new Promise(resolve => (worker.onmessage = resolve));
+    _getOnMessagePromisesFactory(worker) {
+      return () =>
+        new Promise(
+          resolve =>
+            console.log(worker.onmessage) || (worker.onmessage = resolve)
+        ).then(event => event.data);
     }
 
     serverToDBFormat(serverData, promisesLen) {
       return this._getResultIterator(
         serverData,
         promisesLen,
-        this._serverToDbWorker,
-        this._serverToDbWorkerOnMessage
+        this._serverToDbWorker
       );
     }
 
     dbToCanvasFormat(dbData, promisesLen) {
-      return this._getResultIterator(
-        dbData,
-        promisesLen,
-        this._dbToAppWorker,
-        this._dbToAppWorkerOnMessage
-      );
+      return this._getResultIterator(dbData, promisesLen, this._dbToAppWorker);
     }
 
-    _getResultIterator(data, promisesLen, worker, onMessagePromise) {
+    _getResultIterator(data, promisesLen, worker) {
+      const results = this._UtilsService.getObjArray(promisesLen);
+      const iterator = function*() {
+        for (let i = 0; i < results.length; i++) {
+          yield results[i];
+        }
+      };
       worker.postMessage(data);
 
-      const iteratorFactory = (limit, onMessagePromise) => {
-        return function*() {
-          console.log("-=-=-=-");
-          for (let i = 0; i < limit; i++) {
-            yield onMessagePromise;
+      return new Promise(resolve => {
+        let resultsCounter = 0;
+        worker.onmessage = event => {
+          if (resultsCounter > promisesLen) {
+            return;
+          }
+
+          results[resultsCounter++] = event.data;
+          if (resultsCounter === promisesLen) {
+            resolve(iterator);
           }
         };
-      };
-
-      return iteratorFactory(promisesLen, onMessagePromise);
+      });
     }
   }
 
@@ -161,18 +209,16 @@
       const transformPomises = this._UtilsService.getObjArray(
         tableEntries.length
       );
-
       for (let i = 0; i < tableEntries.length; i++) {
-        console.log("->", i);
-        transformPomises[i] = this._TransformService.dbToCanvasFormat(
+        transformPomises[i] = await this._TransformService.dbToCanvasFormat(
           tableEntries[i].value,
-          tableEntries.length
-        )();
+          tableEntries[i].value.length
+        );
       }
 
       const iterator = function*() {
         for (let i = 0; i < tableEntries.length; i++) {
-          for (let promise of transformPomises[i]) {
+          for (let promise of transformPomises[i]()) {
             yield promise;
           }
         }
@@ -213,19 +259,20 @@
     async syncAndGetItemsIterator(objStoreName, apiPath) {
       //todo: опустошать таблицу сначала
       const serverData = await this._ApiService.fetch(apiPath);
-      const tableObjectIt = this._TransformService
-        .serverToDBFormat(serverData, 1)()
-        .next();
-      const tableObject = await tableObjectIt.value;
+      const tableObjectIt = (await this._TransformService.serverToDBFormat(
+        serverData,
+        1
+      ))().next();
+      const tableObject = tableObjectIt.value;
 
       const transformPomises = this._UtilsService.getObjArray(
         Object.keys(tableObject).length
       );
       let i = 0;
       for (let key in tableObject) {
-        transformPomises[i++] = this._TransformService.dbToCanvasFormat(
+        transformPomises[i++] = await this._TransformService.dbToCanvasFormat(
           tableObject[key],
-          Object.keys(tableObject).length
+          Object.keys(tableObject[key]).length
         );
       }
 
@@ -235,7 +282,7 @@
           for (let key in tableObject) {
             const transaction = transactoinsFactory();
             transaction.add(tableObject[key], key);
-            for (let itemPromise of transformPomises[i++]) {
+            for (let itemPromise of transformPomises[i++]()) {
               yield itemPromise;
             }
           }
@@ -295,11 +342,26 @@
     getObjArray(count) {
       return Array.apply(null, Array(count)).map(Object.prototype.valueOf, {});
     }
+
+    getDeferredArray(count) {
+      return Array.apply(null, Array(count)).map(
+        Deferred.prototype.valueOf,
+        new Deferred()
+      );
+    }
+  }
+
+  class Deferred {
+    constructor() {
+      this.promise = new Promise(resolve => {
+        this.resolve = resolve;
+      });
+    }
   }
 
   const utilsService = new UtilsService();
   const apiService = new ApiService(API_URL);
-  const transformService = new TransformService();
+  const transformService = new TransformService(utilsService);
   const storageService = new StorageService(
     STORE_PARAMS,
     w.indexedDB,
@@ -311,7 +373,13 @@
 
   const appPromise = new Promise(resolve => {
     w.document.addEventListener("DOMContentLoaded", () => {
-      const app = new App(apiService, storageService, transformService);
+      const canvasDrawer = new CanvasDrawer(w.document, "canvas", 501, 301);
+      const app = new App(
+        apiService,
+        storageService,
+        transformService,
+        canvasDrawer
+      );
       resolve(app);
     });
   });

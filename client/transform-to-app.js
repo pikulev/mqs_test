@@ -1,8 +1,5 @@
 onmessage = event => {
-  const len = event.data.length;
-  
-  event.data.forEach(item => {
-    const result = { label: item.t, value: item.v };
-    postMessage(result);
-  });
+  for (let i = 0; i < event.data.length; i++) {
+    postMessage({ label: event.data[i].t, value: event.data[i].v });
+  }
 };
