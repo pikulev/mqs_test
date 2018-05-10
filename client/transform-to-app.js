@@ -13,6 +13,8 @@ function getAveragedValues(array, chunkSize) {
     .map(chunk => {
       const chunkLength = chunk.length;
       const sum = chunk.reduce((prev, next) => prev + next.v, 0);
-      return sum / chunkLength;
+      const midIndex = Math.floor(chunkLength / 2);
+
+      return { t: chunk[midIndex].t, v: sum / chunkLength };
     });
 }

@@ -31,9 +31,9 @@
     *draw(data, dataLength) {
       this._context.beginPath();
       this._context.moveTo(0, this.height / 2);
-      const dataDensity = dataLength / this.width;
+    //   const dataDensity = dataLength / this.width;
 
-      for (let i = 0; i < this.width; i += 1) {
+      for (let i = 0; i < dataLength; i += 1) {
         this._context.lineTo(i, (yield) + this.height / 2);
       }
       this._context.strokeStyle = "#999";
@@ -61,7 +61,7 @@
         this._canvasDrawer.width
       );
       const items = [];
-      const drawIterator = this._canvasDrawer.draw(46020);
+      const drawIterator = this._canvasDrawer.draw(500);
       for (let i of iterator()) {
         drawIterator.next(i.value);
       }
@@ -80,7 +80,7 @@
         this._canvasDrawer.width
       );
       const items = [];
-      const drawIterator = this._canvasDrawer.draw(46020);
+      const drawIterator = this._canvasDrawer.draw(500);
       for (let i of iterator()) {
         drawIterator.next(i.value);
       }
