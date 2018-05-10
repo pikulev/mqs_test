@@ -2,37 +2,37 @@
 <html>
 
 <head>
-    <title>MetaQuotes Software test</title>
-    <meta charset="UTF-8">
-    <meta name="author" content="Vasiliy Pikulev">
-    <meta name="description" content="MetaQuotes Software test">
+  <title>MetaQuotes Software test</title>
+  <meta charset="UTF-8">
+  <meta name="author" content="Vasiliy Pikulev">
+  <meta name="description" content="MetaQuotes Software test">
 
-    <link rel="stylesheet" href="/assets/main.css">
+  <link rel="stylesheet" href="/assets/main.css">
 
-    <script type="module" src="/assets/app.js" defer></script>
-    <script src="/assets/routing.js" async></script>
+  <script type="module" src="/js/app.js" defer></script>
+  <script src="/js/routing.js" async></script>
 </head>
 
 <body>
-    <div class="app">
-        <nav class="app__navigation nav">
-            <ul class="nav__options">
-                <li class="nav__item">
-                    <a href data-link="/temperature">Temperature</a>
-                </li>
-                <li class="nav__item">
-                    <a href data-link="/precipitation">Precipitation</a>
-                </li>
-            </ul>
-        </nav>
-        <section class="app__main main-section">
-            <div>
-                <select id="from-select"></select>
-                <select id="to-select"></select>
-            </div>
-            <canvas class="main-serction__canvas" id="canvas" width="1512px" height="301px"></canvas>
-        </section>
-    </div>
+  <div class="app">
+    <nav class="app__navigation nav">
+      <ul class="nav__options">
+        <li class="nav__item">
+          <a href data-link="/temperature">Temperature</a>
+        </li>
+        <li class="nav__item">
+          <a href data-link="/precipitation">Precipitation</a>
+        </li>
+      </ul>
+    </nav>
+    <section class="app__main main-section">
+      <div class="main-section__options">
+        <select id="from-select"></select>
+        <select id="to-select"></select>
+      </div>
+      <canvas class="main-serction__canvas" id="canvas" width="1512px" height="301px"></canvas>
+    </section>
+  </div>
 </body>
 
 </html>

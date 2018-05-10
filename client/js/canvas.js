@@ -1,3 +1,7 @@
+const BACKGROUND_COLOR = "#171717";
+const GRID_COLOR = "#1c1c1c";
+const LINE_COLOR = "#FF0041";
+
 export default class CanvasDrawer {
   constructor(canvas) {
     this._canvas = canvas;
@@ -10,7 +14,8 @@ export default class CanvasDrawer {
   }
 
   clear() {
-    this._context.clearRect(0, 0, this.width, this.height);
+    this._context.fillStyle = BACKGROUND_COLOR;
+    this._context.fillRect(0, 0, this.width, this.height);
     this._context.beginPath();
 
     for (let x = 0.5; x <= this.width; x += 20) {
@@ -22,7 +27,7 @@ export default class CanvasDrawer {
       this._context.lineTo(this.width, y);
     }
 
-    this._context.strokeStyle = "#eee";
+    this._context.strokeStyle = GRID_COLOR;
     this._context.stroke();
   }
 
@@ -37,7 +42,7 @@ export default class CanvasDrawer {
       value = yield;
       this._context.lineTo(i++, value + this.height / 2);
     }
-    this._context.strokeStyle = "#999";
+    this._context.strokeStyle = LINE_COLOR;
     this._context.stroke();
   }
 }

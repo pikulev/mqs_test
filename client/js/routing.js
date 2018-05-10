@@ -44,14 +44,9 @@
     return linksElements;
   }
 
-  function setActiveLink(
-    linksElements,
-    currentRoute,
-    className = ACTIVE_LINK_CLASSNAME
-  ) {
+  function setActiveLink(linksElements, currentRoute, className = ACTIVE_LINK_CLASSNAME) {
     linksElements.forEach(el => {
-      const linkToCurrentRoute =
-        el.dataset[LINK_DATA_ATTRUBUTE] === currentRoute;
+      const linkToCurrentRoute = el.dataset[LINK_DATA_ATTRUBUTE] === currentRoute;
       el.classList[linkToCurrentRoute ? "add" : "remove"](className);
     });
   }
@@ -61,11 +56,7 @@
       throw new Error(`Unknown route: ${route}`);
     }
 
-    w.history[replace ? "replaceState" : "pushState"](
-      ROUTES[route].state,
-      ROUTES[route].title,
-      route
-    );
+    w.history[replace ? "replaceState" : "pushState"](ROUTES[route].state, ROUTES[route].title, route);
 
     const routeChangedEvent = new CustomEvent("routeChanged", {
       detail: ROUTES[route]

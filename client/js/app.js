@@ -1,8 +1,8 @@
-import { UtilsService, Deferred } from "/assets/utils.js";
-import ApiService from "/assets/api.js";
-import TransformService from "/assets/transforms.js";
-import StorageService from "/assets/storage.js";
-import CanvasDrawer from "/assets/canvas.js";
+import { UtilsService, Deferred } from "/js/utils.js";
+import ApiService from "/js/api.js";
+import TransformService from "/js/transforms.js";
+import StorageService from "/js/storage.js";
+import CanvasDrawer from "/js/canvas.js";
 
 ("use strict");
 (w => {
@@ -13,14 +13,7 @@ import CanvasDrawer from "/assets/canvas.js";
   };
 
   class App {
-    constructor(
-      apiService,
-      storageService,
-      transformService,
-      canvasDrawer,
-      fromSelectElement,
-      toSelectElement
-    ) {
+    constructor(apiService, storageService, transformService, canvasDrawer, fromSelectElement, toSelectElement) {
       console.log("app loaded");
       this._apiService = apiService;
       this._storageServicePromise = storageService.init();
@@ -99,14 +92,7 @@ import CanvasDrawer from "/assets/canvas.js";
       w.reloadCurrentRoute();
     }
 
-    async _getItemsIterator(
-      tableName,
-      apiPath,
-      lowerKey,
-      upperKey,
-      yScaleFactor,
-      averageToLimit
-    ) {
+    async _getItemsIterator(tableName, apiPath, lowerKey, upperKey, yScaleFactor, averageToLimit) {
       const storageService = await this._storageServicePromise;
       const isSyncNeeded = await storageService.isSyncNeeded(tableName);
 
@@ -114,27 +100,14 @@ import CanvasDrawer from "/assets/canvas.js";
         const a = await storageService.sync(tableName, apiPath);
       }
 
-      return storageService.getItemsIterator(
-        tableName,
-        lowerKey,
-        upperKey,
-        yScaleFactor,
-        averageToLimit
-      );
+      return storageService.getItemsIterator(tableName, lowerKey, upperKey, yScaleFactor, averageToLimit);
     }
   }
 
   const utilsService = new UtilsService();
   const apiService = new ApiService(API_URL);
   const transformService = new TransformService(utilsService);
-  const storageService = new StorageService(
-    STORE_PARAMS,
-    w.indexedDB,
-    w.IDBKeyRange,
-    apiService,
-    transformService,
-    utilsService
-  );
+  const storageService = new StorageService(STORE_PARAMS, w.indexedDB, w.IDBKeyRange, apiService, transformService, utilsService);
 
   const appPromise = new Promise(resolve => {
     w.document.addEventListener("DOMContentLoaded", () => {

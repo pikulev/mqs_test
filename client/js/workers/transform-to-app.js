@@ -1,9 +1,5 @@
 onmessage = event => {
-  const values = getAveragedValues(
-    event.data.values,
-    event.data.chunkSize,
-    event.data.yScaleFactor
-  );
+  const values = getAveragedValues(event.data.values, event.data.chunkSize, event.data.yScaleFactor);
 
   for (let i = 0; i < values.length; i++) {
     postMessage({ label: values[i].t, value: values[i].v });

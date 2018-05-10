@@ -1,9 +1,62 @@
-html, body {
-    padding: 0;
-    margin: 0;
+html,
+body {
+  padding: 0;
+  margin: 0;
 
-    background-color: #fff;
+  background-color: #171717;
 
-    font-size: 16px;
-    line-height: 1.2em;
+  font-family: Geneva, Verdana, sans-serif;
+  font-size: 16px;
+  line-height: 1.2em;
+}
+
+.app {
+  padding-top: 20px;
+}
+
+.app__navigation {
+  margin: 10px auto;
+}
+
+.nav__options {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+.nav__item a {
+  display: block;
+
+  padding: 15px 20px;
+
+  color: #a0a0a7;
+  background-color: #303037;
+  text-decoration: none;
+
+  /* color + background-color only */
+  transition: all 250ms ease-out;
+}
+
+.nav__item a.active {
+  color: #fff;
+  background-color: #409f55;
+}
+
+.nav__item:first-child a {
+  border-radius: 3px 0 0 3px;
+}
+.nav__item:last-child a {
+  border-radius: 0 3px 3px 0;
+}
+
+.main-section__options {
+  margin: 30px auto;
+  padding: 5px;
+
+  text-align: center;
 }

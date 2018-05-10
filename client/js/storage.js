@@ -1,12 +1,5 @@
 export default class StorageService {
-  constructor(
-    { dbName, version },
-    indexedDB,
-    IDBKeyRange,
-    ApiService,
-    TransformService,
-    UtilsService
-  ) {
+  constructor({ dbName, version }, indexedDB, IDBKeyRange, ApiService, TransformService, UtilsService) {
     this.version = version;
     this.dbName = dbName;
     this._indexedDB = indexedDB;
@@ -36,27 +29,15 @@ export default class StorageService {
   }
 
   async getItemsIterator(objStoreName, lowerKey, upperKey, yScaleFactor, averageToLimit) {
-    const tableEntries = await this._getTableEntries(
-      objStoreName,
-      lowerKey,
-      upperKey
-    );
+    const tableEntries = await this._getTableEntries(objStoreName, lowerKey, upperKey);
 
-    const transformPomises = this._UtilsService.getObjArray(
-      tableEntries.length
-    );
-    const chunkSize = averageToLimit
-      ? Math.ceil(tableEntries.length * 31 / averageToLimit)
-      : 1;
+    const transformPomises = this._UtilsService.getObjArray(tableEntries.length);
+    const chunkSize = averageToLimit ? Math.ceil(tableEntries.length * 31 / averageToLimit) : 1;
 
     console.log(chunkSize, averageToLimit, tableEntries.length);
 
     for (let i = 0; i < tableEntries.length; i++) {
-      transformPomises[i] = await this._TransformService.dbToCanvasFormat(
-        tableEntries[i].value,
-        yScaleFactor,
-        chunkSize
-      );
+      transformPomises[i] = await this._TransformService.dbToCanvasFormat(tableEntries[i].value, yScaleFactor, chunkSize);
     }
 
     const iterator = function*() {
@@ -71,10 +52,7 @@ export default class StorageService {
   }
 
   async _getTableEntries(objStoreName, lowerKey, upperKey) {
-    const boundKeyRange =
-      lowerKey && upperKey
-        ? this._IDBKeyRange.bound(lowerKey, upperKey, false, false)
-        : null;
+    const boundKeyRange = lowerKey && upperKey ? this._IDBKeyRange.bound(lowerKey, upperKey, false, false) : null;
 
     const count = await this.count(objStoreName, boundKeyRange);
     const result = this._UtilsService.getObjArray(count);
@@ -92,20 +70,14 @@ export default class StorageService {
     return new Promise(resolve => {
       let index = 0;
       const transaction = this._transactoinsFactory[objStoreName]();
-      transaction.openCursor(boundKeyRange).onsuccess = cursorHandlerFactory(
-        resolve,
-        index
-      );
+      transaction.openCursor(boundKeyRange).onsuccess = cursorHandlerFactory(resolve, index);
     });
   }
 
   async sync(objStoreName, apiPath) {
     //todo: опустошать таблицу сначала
     const serverData = await this._ApiService.fetch(apiPath);
-    const tableObjectIt = await this._TransformService.serverToDBFormat(
-      serverData,
-      1
-    );
+    const tableObjectIt = await this._TransformService.serverToDBFormat(serverData, 1);
 
     const tableObject = tableObjectIt().next().value;
     const keys = Object.keys(tableObject);
@@ -145,16 +117,10 @@ export default class StorageService {
       {},
       {
         ["temperature"]: {
-          get: () => () =>
-            db
-              .transaction(["temperature"], "readwrite")
-              .objectStore("temperature")
+          get: () => () => db.transaction(["temperature"], "readwrite").objectStore("temperature")
         },
         ["precipitation"]: {
-          get: () => () =>
-            db
-              .transaction(["precipitation"], "readwrite")
-              .objectStore("precipitation")
+          get: () => () => db.transaction(["precipitation"], "readwrite").objectStore("precipitation")
         }
       }
     );

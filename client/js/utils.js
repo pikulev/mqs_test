@@ -6,10 +6,7 @@ export class UtilsService {
   }
 
   getDeferredArray(count) {
-    return Array.apply(null, Array(count)).map(
-      Deferred.prototype.valueOf,
-      new Deferred()
-    );
+    return Array.apply(null, Array(count)).map(Deferred.prototype.valueOf, new Deferred());
   }
 }
 
