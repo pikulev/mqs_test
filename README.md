@@ -5,8 +5,10 @@
 ```bash
 $ git clone git@github.com:pikulev/mqs_test.git
 $ cd mqs_test
-$ node server/server.js; open http://localhost:9077
+$ node server/server.js
 ```
+
+В браузере `http://localhost:9077`
 
 ## О результате
 
